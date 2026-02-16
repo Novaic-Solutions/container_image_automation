@@ -1,5 +1,5 @@
 #!/bin/bash
-while getopts ":n:t" opt; do
+while getopts ":n:t:v:p:h" opt; do
     case $opt in
         n)
             NAME=$OPTARG
@@ -29,7 +29,7 @@ done
 # Set default values if variables are not provided
 #-----------------------------------------------------------------------------
 if [ -z "$NAME" ]; then
-    DIR_NAME="rootfs"
+    DIR_NAME="image"
 else
     DIR_NAME="$NAME"
 fi
@@ -64,55 +64,90 @@ if [ -d "$DIR_NAME" ]; then
     rm -rf "$DIR_NAME"
 fi
 
+mkdir -p $DIR_NAME/image/blobs/sha256
+cp oci-layout $DIR_NAME/image/oci-layout
+touch $DIR_NAME/index.json
+
+
 #------------------------------------------------------------------------------
 #                       create rootfs
 #------------------------------------------------------------------------------
-#   Run debootstrap to create the rootfs directory
-#   tar -cf rootfs.tar rootfs/    to create the initial tar file
-#   gzip --keep rootfs.tar        to create the compressed tar file
-#   sha256sum rootfs.tar.gz | cut -d " " -f1   to get the sha hash of the compressed tarball, save as variable
-#   sha256sum rootfs.tar | cut -d " " -f1  to get the sha hash of the tarball, save as variable
-#   move root.tar.gz to blobs/sha256/<hash value>
 
+debootstrap --variant=$DEBOOTSTRAP_VARIANT $DEBOOTSTRAP_PACKAGES $IMAGE_TYPE $DIR_NAME/rootfs
 
-debootstrap --variant=$DEBOOTSTRAP_VARIANT $DEBOOTSTRAP_PACKAGES $IMAGE_TYPE $DIR_NAME
+tar -cf $DIR_NAME/rootfs.tar $DIR_NAME/rootfs/
+TAR_SHA=$(sha256sum $DIR_NAME/rootfs.tar | cut -d " " -f1)
+gzip --keep $DIR_NAME/rootfs.tar
+TAR_GZ_SHA=$(sha256sum $DIR_NAME/rootfs.tar.gz | cut -d " " -f1)
 
-
-tar -cf rootfs.tar $DIR_NAME/
-
-
-#------------------------------------------------------------------------------------------
-#                       image-config.json
-#------------------------------------------------------------------------------------------
-#   create tar file of rootfs
-#   get sha hash of the rootfs.tar and place it in the image-config.json under rootfs.diff_ids
-#   get the sha hash of image-config.json and hold in variable
-#   cp image-config.json to sha256/<hash value>
-
-
-#----------------------------------------------------------------------------
-#                       image-manifest.json
-#----------------------------------------------------------------------------
-#   get the sha hash of image-config.json and place it in image-manifest.json under config.digest
-#   take the entire image-config.json file as a string, base64 encode it, and put that in the image-manifest.json under config.data
-#   use du --byte image-config.json | cut -f1 to get the size in byes, store value in config.size
-#   take the sha hash of rootfs.tar.gz and place it in image-manifest.json under layers.digest
-#   use du --bytes root.tar.gz | cut -f1   and place the bytes total in image-manifest.json under layers.size
-#   get sha hash of image-manifest.json and store as variable
-#   cp image-manifest.json to sha256/<hash value>
-
+cp $DIR_NAME/rootfs.tar.gz $DIR_NAME/image/blobs/sha256/$TAR_GZ_SHA
 
 #-----------------------------------------------------------------------------
 #                           index.json
 #-----------------------------------------------------------------------------
-#   take image-manifest.json's hash and place in manfiests.digest
-#   use du --bytes blobs/image-manifest.json | cut -f1   and save value in manifests.size
-#   get the entire image-manifests.json file as a string and base64 encode it. then place that value in manifests.data
+cat <<JSON > $DIR_NAME/config.json
+{
+  "created": "$(date --iso-8601=ns)",
+  "author": "Novaic_Solutions",
+  "architecture": "amd64",
+  "os": "linux",
+  "config": {
+    "Env": [ "PATH=/usr/bin:/bin" ],
+    "Entrypoint": [ "/usr/bin/bash" ]
+  },
+  "rootfs": {
+    "type": "layers",
+    "diff_ids": [
+      "sha256:$TAR_SHA"
+    ]
+  }
+}
+JSON
 
+CONFIG_SHA=$(sha256sum $DIR_NAME/config.json | cut -d " " -f1)
+cp $DIR_NAME/config.json $DIR_NAME/image/blob/sha256/$CONFIG_SHA
 
 #-----------------------------------------------------------------------------
 #                           manifest.json
 #-----------------------------------------------------------------------------
-#   place value blobs/sha256/<hash for image-config.json> in Config
-#   place value blobs/sha256/<hash for rootfs.tar.gz> in Layers
+cat <<JSON > $DIR_NAME/manifest.json
+{
+  "schemaVersion": 2,
+  "config": {
+    "mediaType": "application/vnd.oci.image.config.v1+json",
+    "size": $(du --bytes $DIR_NAME/config.json | grep -oE "[[:digit:]]+"),
+    "digest": "sha256:$CONFIG_SHA"
+  },
+  "layers": [
+    {
+      "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+      "size": $(du --bytes $DIR_NAME/rootfs.tar.gz | grep -oE "[[:digit:]]+"),
+      "digest": "sha256:$TAR_GZ_SHA"
+    }
+  ]
+}
+JSON
 
+MANIFEST_SHA=$(sha256sum $DIR_NAME/manifest.json | cut -d " " -f1)
+cp $DIR_NAME/manifest.json $DIR_NAME/image/blobs/sha256/$MANIFEST_SHA
+
+#-----------------------------------------------------------------------------
+#                           index.json
+#-----------------------------------------------------------------------------
+cat <<JSON > $DIR_NAME/index.json
+{
+  "schemaVersion": 2,
+  "mediaType": "application/vnd.oci.image.index.v1+json",
+  "manifests": [
+    {
+      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+      "size": $(du --bytes $DIR_NAME/manifest.json | grep -oE "[[:digit:]]+"),
+      "digest": "sha256:$MANIFEST_SHA",
+      "platform": {
+        "architecture": "amd64",
+        "os": "linux"
+      }
+    }
+  ]
+}
+JSON
