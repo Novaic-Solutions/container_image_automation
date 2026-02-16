@@ -7,12 +7,53 @@ while getopts ":n:t" opt; do
         t)
             TYPE=$OPTARG
             ;;
+        v)
+            VARIANT=$OPTARG
+            ;;
+        p)
+            PACKAGES=$OPTARG
+            ;;
         h)
-
+            echo "Usage: $0 -n <directory name> -t <image type> -h (help) -p <packages> -v <variant>"
+            echo "  -n: Specify the name of the directory to create (default: rootfs)"
+            echo "  -v: Specify the variant for debootstrap (e.g., buildd, minbase)"
+            echo "  -t: Specify the type of image to create (e.g., noble, noble-dev)"
+            echo "  -p: Specify additional packages to include in the image (comma-separated)"
+            echo "  -h: Display this help message"
+            exit 1
+            ;;
+    esac
+done
 
 #-----------------------------------------------------------------------------
-#                       Get arguments
+# Set default values if variables are not provided
 #-----------------------------------------------------------------------------
+if [ -z "$NAME" ]; then
+    DIR_NAME="rootfs"
+else
+    DIR_NAME="$NAME"
+fi
+
+#-----------------------------------------
+if [ -z "$TYPE" ]; then
+    IMAGE_TYPE="noble"
+else
+    IMAGE_TYPE="$TYPE"
+fi
+
+#-----------------------------------------
+if [ -z "$VARIANT" ]; then
+    DEBOOTSTRAP_VARIANT="buildd"
+else
+    DEBOOTSTRAP_VARIANT="$VARIANT"
+fi
+
+#-----------------------------------------
+if [ -z "$PACKAGES" ]; then
+    DEBOOTSTRAP_PACKAGES=""
+else
+    DEBOOTSTRAP_PACKAGES="--include=$(echo $PACKAGES | tr ',' ',')"
+fi
 
 
 #-----------------------------------------------------------------------------
