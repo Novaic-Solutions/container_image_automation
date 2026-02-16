@@ -64,26 +64,36 @@ if [ -d "$DIR_NAME" ]; then
     rm -rf "$DIR_NAME"
 fi
 
+printf "\nCreating the directories for the new image"
 mkdir -p $DIR_NAME/image/blobs/sha256
 cp oci-layout $DIR_NAME/image/oci-layout
 touch $DIR_NAME/index.json
+touch $DIR_NAME/config.json
+touch $DIR_NAME/manifest.json
 
 
 #------------------------------------------------------------------------------
 #                       create rootfs
 #------------------------------------------------------------------------------
+printf "\nBeginning Debootstrap for $DEBOOTSTRAP_VARIANT"
 
 debootstrap --variant=$DEBOOTSTRAP_VARIANT $DEBOOTSTRAP_PACKAGES $IMAGE_TYPE $DIR_NAME/rootfs
 
+printf "\nCreating tar file for $DIR_NAME"
 tar -cf $DIR_NAME/rootfs.tar $DIR_NAME/rootfs/
 TAR_SHA=$(sha256sum $DIR_NAME/rootfs.tar | cut -d " " -f1)
+printf "\nSHA HASH: $TAR_SHA\n"
+
+printf "\nZipping the tar file\n"
 gzip --keep $DIR_NAME/rootfs.tar
 TAR_GZ_SHA=$(sha256sum $DIR_NAME/rootfs.tar.gz | cut -d " " -f1)
 
+printf "\nSHA HASH: $TAR_GZ_SHA"
+printf "\nMoving tar.gz to the sha256 folder and renaming to the above hash."
 cp $DIR_NAME/rootfs.tar.gz $DIR_NAME/image/blobs/sha256/$TAR_GZ_SHA
 
 #-----------------------------------------------------------------------------
-#                           index.json
+#                           config.json
 #-----------------------------------------------------------------------------
 cat <<JSON > $DIR_NAME/config.json
 {
@@ -105,6 +115,7 @@ cat <<JSON > $DIR_NAME/config.json
 JSON
 
 CONFIG_SHA=$(sha256sum $DIR_NAME/config.json | cut -d " " -f1)
+printf "\nconfig.json created, sha: $CONFIG_SHA.   Moving to sha256 folder"
 cp $DIR_NAME/config.json $DIR_NAME/image/blob/sha256/$CONFIG_SHA
 
 #-----------------------------------------------------------------------------
@@ -129,6 +140,7 @@ cat <<JSON > $DIR_NAME/manifest.json
 JSON
 
 MANIFEST_SHA=$(sha256sum $DIR_NAME/manifest.json | cut -d " " -f1)
+printf "\nCreated manifest.json with sha: $MANIFEST_SHA.  Moving to sha256 directory"
 cp $DIR_NAME/manifest.json $DIR_NAME/image/blobs/sha256/$MANIFEST_SHA
 
 #-----------------------------------------------------------------------------
@@ -151,3 +163,5 @@ cat <<JSON > $DIR_NAME/index.json
   ]
 }
 JSON
+
+printf "\nCreated index.json\n\n"
