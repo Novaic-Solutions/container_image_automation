@@ -59,8 +59,10 @@ fi
 #-----------------------------------------------------------------------------
 #                       Check if the directory exists
 #-----------------------------------------------------------------------------
-
-#debootstrap --variant=buildd --include=python3 noble rootfs
+if [ -d "$DIR_NAME" ]; then
+    echo "Directory $DIR_NAME already exists. Removing and recreating it."
+    rm -rf "$DIR_NAME"
+fi
 
 #------------------------------------------------------------------------------
 #                       create rootfs
@@ -71,6 +73,12 @@ fi
 #   sha256sum rootfs.tar.gz | cut -d " " -f1   to get the sha hash of the compressed tarball, save as variable
 #   sha256sum rootfs.tar | cut -d " " -f1  to get the sha hash of the tarball, save as variable
 #   move root.tar.gz to blobs/sha256/<hash value>
+
+
+debootstrap --variant=$DEBOOTSTRAP_VARIANT $DEBOOTSTRAP_PACKAGES $IMAGE_TYPE $DIR_NAME
+
+
+tar -cf rootfs.tar $DIR_NAME/
 
 
 #------------------------------------------------------------------------------------------
