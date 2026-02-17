@@ -67,9 +67,9 @@ fi
 printf "\nCreating the directories for the new image"
 mkdir -p $DIR_NAME/image/blobs/sha256
 cp oci-layout $DIR_NAME/image/oci-layout
-touch $DIR_NAME/index.json
-touch $DIR_NAME/config.json
-touch $DIR_NAME/manifest.json
+touch $DIR_NAME/image/index.json
+touch $DIR_NAME/image/config.json
+touch $DIR_NAME/image/manifest.json
 
 
 #------------------------------------------------------------------------------
@@ -80,7 +80,7 @@ printf "\nBeginning Debootstrap for $DEBOOTSTRAP_VARIANT"
 debootstrap --variant=$DEBOOTSTRAP_VARIANT $DEBOOTSTRAP_PACKAGES $IMAGE_TYPE $DIR_NAME/rootfs
 
 printf "\nCreating tar file for $DIR_NAME"
-tar -cf $DIR_NAME/rootfs.tar $DIR_NAME/rootfs/
+tar --directory $DIR_NAME/rootfs --create --file $DIR_NAME/rootfs.tar .
 TAR_SHA=$(sha256sum $DIR_NAME/rootfs.tar | cut -d " " -f1)
 printf "\nSHA HASH: $TAR_SHA\n"
 
@@ -95,7 +95,7 @@ cp $DIR_NAME/rootfs.tar.gz $DIR_NAME/image/blobs/sha256/$TAR_GZ_SHA
 #-----------------------------------------------------------------------------
 #                           config.json
 #-----------------------------------------------------------------------------
-cat <<JSON > $DIR_NAME/config.json
+cat <<JSON > $DIR_NAME/image/config.json
 {
   "created": "$(date --iso-8601=ns)",
   "author": "Novaic_Solutions",
@@ -103,7 +103,7 @@ cat <<JSON > $DIR_NAME/config.json
   "os": "linux",
   "config": {
     "Env": [ "PATH=/usr/bin:/bin" ],
-    "Entrypoint": [ "/usr/bin/bash" ]
+    "Entrypoint": [ "/bin/bash" ]
   },
   "rootfs": {
     "type": "layers",
@@ -114,46 +114,46 @@ cat <<JSON > $DIR_NAME/config.json
 }
 JSON
 
-CONFIG_SHA=$(sha256sum $DIR_NAME/config.json | cut -d " " -f1)
+CONFIG_SHA=$(sha256sum $DIR_NAME/image/config.json | cut -d " " -f1)
 printf "\nconfig.json created, sha: $CONFIG_SHA.   Moving to sha256 folder"
-cp $DIR_NAME/config.json $DIR_NAME/image/blob/sha256/$CONFIG_SHA
+cp $DIR_NAME/image/config.json $DIR_NAME/image/blobs/sha256/$CONFIG_SHA
 
 #-----------------------------------------------------------------------------
 #                           manifest.json
 #-----------------------------------------------------------------------------
-cat <<JSON > $DIR_NAME/manifest.json
+cat <<JSON > $DIR_NAME/image/manifest.json
 {
   "schemaVersion": 2,
   "config": {
     "mediaType": "application/vnd.oci.image.config.v1+json",
-    "size": $(du --bytes $DIR_NAME/config.json | grep -oE "[[:digit:]]+"),
+    "size": $(du --bytes $DIR_NAME/image/config.json  | cut -f1),
     "digest": "sha256:$CONFIG_SHA"
   },
   "layers": [
     {
       "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
-      "size": $(du --bytes $DIR_NAME/rootfs.tar.gz | grep -oE "[[:digit:]]+"),
+      "size": $(du --bytes $DIR_NAME/rootfs.tar.gz  | cut -f1),
       "digest": "sha256:$TAR_GZ_SHA"
     }
   ]
 }
 JSON
 
-MANIFEST_SHA=$(sha256sum $DIR_NAME/manifest.json | cut -d " " -f1)
+MANIFEST_SHA=$(sha256sum $DIR_NAME/image/manifest.json | cut -d " " -f1)
 printf "\nCreated manifest.json with sha: $MANIFEST_SHA.  Moving to sha256 directory"
-cp $DIR_NAME/manifest.json $DIR_NAME/image/blobs/sha256/$MANIFEST_SHA
+cp $DIR_NAME/image/manifest.json $DIR_NAME/image/blobs/sha256/$MANIFEST_SHA
 
 #-----------------------------------------------------------------------------
 #                           index.json
 #-----------------------------------------------------------------------------
-cat <<JSON > $DIR_NAME/index.json
+cat <<JSON > $DIR_NAME/image/index.json
 {
   "schemaVersion": 2,
   "mediaType": "application/vnd.oci.image.index.v1+json",
   "manifests": [
     {
       "mediaType": "application/vnd.oci.image.manifest.v1+json",
-      "size": $(du --bytes $DIR_NAME/manifest.json | grep -oE "[[:digit:]]+"),
+      "size": $(du --bytes $DIR_NAME/image/manifest.json  | cut -f1),
       "digest": "sha256:$MANIFEST_SHA",
       "platform": {
         "architecture": "amd64",
@@ -165,3 +165,11 @@ cat <<JSON > $DIR_NAME/index.json
 JSON
 
 printf "\nCreated index.json\n\n"
+
+#----------------------------------------------------------------------------
+#               Create image tar file
+#----------------------------------------------------------------------------
+tar --directory $DIR_NAME/image --create --file oci-image.tar .
+
+rm $DIR_NAME -rf 
+
