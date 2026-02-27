@@ -171,5 +171,8 @@ printf "\nCreated index.json\n\n"
 #----------------------------------------------------------------------------
 tar --directory $DIR_NAME/image --create --file oci-image.tar .
 
-rm $DIR_NAME -rf 
+podman load --input oci-image.tar
 
+IMG_ID=$(podman images -q $ARTIFACT_STORAGE/$TAG_NAME:$IMAGE_VERSION)
+
+rm $DIR_NAME -rf 
