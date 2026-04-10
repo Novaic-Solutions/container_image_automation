@@ -1,0 +1,77 @@
+
+name: Build_Base_Image
+run-name: Build Base Image
+
+on:
+  push:
+    branches:
+      - main
+      - feature/*
+
+jobs:
+
+  build:
+    permissions:
+      contents: read
+      packages: write
+      pages: write
+      id-token: write
+
+    runs-on:
+      group: Compute_Runner_01
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Check if the cert directory exists, if not create it
+      - name: Check cert directory
+        run: |
+          if [ ! -d "/etc/containers/certs.d/nexus.nebula-hosting.net" ]; then
+            mkdir -p /etc/containers/certs.d/nexus.nebula-hosting.net
+          fi
+
+      # Create certs if they dont exist
+      - name: Create certs
+        run: |
+          echo "${{ secrets.CA_CERT }}" > $CA_CERT_PATH
+          echo "${{ secrets.CERT_KEY }}" > $CERT_KEY_PATH
+          echo "${{ secrets.CERT_CRT }}" > $CERT_CRT_PATH
+        env:
+          CA_CERT_PATH: /etc/containers/certs.d/nexus.nebula-hosting.net/ca.crt
+          CERT_KEY_PATH: /etc/containers/certs.d/nexus.nebula-hosting.net/cert.key
+          CERT_CRT_PATH: /etc/containers/certs.d/nexus.nebula-hosting.net/cert.crt
+          CA_CERT: ${{ secrets.CA_CERT }}
+          CERT_KEY: ${{ secrets.NEBULA_KEY }}
+          CERT_CRT: ${{ secrets.NEBULA_CERT }}
+
+      # - name: Build Image
+      #   id: build-image
+      #   uses: redhat-actions/buildah-build@v2
+      #   with:
+
+      #     image: fyb3r/squirrel_bot
+      #     tags: latest
+      #     tls-verify: false
+      #     containerfiles: |
+      #       ./Dockerfile
+
+      # - name: Push To Registry
+      #   uses: redhat-actions/push-to-registry@v2
+      #   with:
+      #     image: fyb3r/squirrel_bot
+      #     tags: latest
+      #     tls-verify: false
+      #     registry: docker.io
+      #     username: ${{ vars.DOCKERHUB_USERNAME }}
+      #     password: ${{ secrets.DOCKER_HUB_PAT }}
+
+
+      # - name: Set up Docker Buildx
+      #   uses: docker/setup-buildx-action@v3
+
+      # - name: Build and push
+      #   uses: docker/build-push-action@v6
+      #   with:
+      #     push: true
+      #     tags: ${{ vars.DOCKERHUB_USERNAME }}/squirrel_bot:latest
