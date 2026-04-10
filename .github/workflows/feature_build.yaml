@@ -17,8 +17,7 @@ jobs:
       pages: write
       id-token: write
 
-    runs-on:
-      group: Compute_Runner_01
+    runs-on: nebulacompute01
 
     steps:
       - name: Checkout code
